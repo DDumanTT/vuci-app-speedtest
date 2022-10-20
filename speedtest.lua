@@ -51,7 +51,7 @@ function DownloadTest(host)
         noprogress = false,
         timeout = 15
     })
-    local status, err = pcall(e.perform, e)
+    local status, callErr = pcall(e.perform, e)
 
     local handle, err = io.open(ResultsFile, "r")
     if not handle then
@@ -65,6 +65,13 @@ function DownloadTest(host)
     if not handle then
         error(err)
     end
+
+    if callErr ~= "[CURL-EASY][OPERATION_TIMEDOUT] Error (28)" then
+        handle:write(json.encode({ status = Status.FAILED, error = callErr }))
+        handle:close()
+        return
+    end
+
     result.status = Status.FINISHED
     handle:write(json.encode(result))
     handle:close()
@@ -95,7 +102,7 @@ function UploadTest(host)
         noprogress = false,
         timeout = 15
     })
-    local status, err = pcall(e.perform, e)
+    local status, callErr = pcall(e.perform, e)
     zero:close()
 
     local handle, err = io.open(ResultsFile, "r")
@@ -110,6 +117,13 @@ function UploadTest(host)
     if not handle then
         error(err)
     end
+
+    if callErr ~= "[CURL-EASY][OPERATION_TIMEDOUT] Error (28)" then
+        handle:write(json.encode({ status = Status.FAILED, error = callErr }))
+        handle:close()
+        return
+    end
+
     result.status = Status.FINISHED
     handle:write(json.encode(result))
     handle:close()
@@ -125,7 +139,7 @@ function GetIpInfo()
 
     local status, err = pcall(e.perform, e)
     if not status then
-        error(err)
+        return json.encode({ status = Status.FAILED, error = err })
     end
     return output
 end
@@ -182,7 +196,7 @@ function FindBestServer()
             local status, err = pcall(e.perform, e)
             if status then
                 local time = e:getinfo_total_time()
-                print(time)
+                -- print(time)
                 if time < best then
                     best = time
                     best_server = server
@@ -194,6 +208,11 @@ function FindBestServer()
     local file, err = io.open(ResultsFile, "w")
     if not file then
         error(err)
+    end
+
+    if not best_server then
+        file:write(json.encode({ status = Status.FAILED, error = "Unable to find best server..." }))
+        return
     end
 
     file:write(json.encode({ status = Status.FINISHED, server = best_server })):close()

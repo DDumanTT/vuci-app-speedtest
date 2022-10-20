@@ -83,20 +83,31 @@ export default {
       this.started = false
     },
     async sleep (ms) {
-      this.timeout = new Promise((resolve, reject) => setTimeout(resolve, ms))
+      if (!this.started) return
+      let timeoutId
+      this.timeout = new Promise((resolve, reject) => {
+        timeoutId = setTimeout(resolve, ms)
+      })
+      this.timeout.abort = () => {
+        clearTimeout(timeoutId)
+      }
       return this.timeout
     },
-    showError (error) {
+    showError (err) {
       this.started = false
       this.message = ''
       this.speed = 0
-      this.timeout && clearTimeout(this.timeout)
-      this.$message.error(error)
+      this.timeout && this.timeout.abort()
+      if (err) this.$message.error('Failed to connect to server...')
     },
     async getIpInfo () {
       this.message = 'Getting ip...'
       try {
         const r = await this.$rpc.call('speedtest', 'getIpInfo')
+        if (r.status === 'failed') {
+          this.showError(r.error)
+          return
+        }
         this.ip = `${r.query} (${r.countryCode})`
       } catch (err) {
         this.showError(err)
@@ -108,7 +119,6 @@ export default {
       try {
         const res = await this.$rpc.call('speedtest', 'alive', { host: this.server })
         if (res.status === 'failed') {
-          this.started = false
           this.showError(res.error)
         }
       } catch (err) {
@@ -164,7 +174,7 @@ export default {
           if (r.status !== 'running') {
             clearInterval(interval)
             if (r.status === 'finished') resolve()
-            if (r.status === 'failed') reject(new Error(r.message))
+            if (r.status === 'failed') reject(new Error(r.error))
           }
         }, REFRESH_SPEED)
       })
